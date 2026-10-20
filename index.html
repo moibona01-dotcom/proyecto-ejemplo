@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Almacén</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase v2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-3 md:p-6">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header & Banner -->
+        <header class="flex flex-col md:flex-row justify-between items-center bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-emerald-400">Gestión de Almacén</h1>
+                <p class="text-xs text-zinc-400">Control de Stock, Precios por Foto, Rubros y Ganancias Mensuales</p>
+            </div>
+            <div id="statusBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="statusText">Verificando conexión...</span>
+            </div>
+        </header>
+
+        <!-- Banner de Notificaciones -->
+        <div id="notificationBanner" class="hidden p-3 rounded-lg text-sm transition-all duration-300"></div>
+
+        <!-- Grid Principal -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- COLUMNA 1: Carga de Productos y Foto Proveedor -->
+            <div class="space-y-6">
+                <!-- Carga de Producto -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+                    <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider border-b border-zinc-800 pb-2" id="tituloFormProducto">1. Cargar Producto Manualmente</h2>
+                    <form id="formProducto" onsubmit="guardarProducto(event)" class="space-y-3">
+                        <input type="hidden" id="prodId">
+                        <input type="text" id="prodCodigo" placeholder="Código de barras / Identificador" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        <input type="text" id="prodNombre" placeholder="Nombre del producto" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        
+                        <!-- Rubro Desplegable -->
+                        <select id="prodTipo" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                            <option value="" disabled selected>Selecciona un rubro...</option>
+                            <option value="Kiosco">Kiosco</option>
+                            <option value="Almacén">Almacén</option>
+                            <option value="Verdulería">Verdulería</option>
+                        </select>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" step="0.01" id="prodCosto" placeholder="Precio Costo ($)" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                            <input type="number" step="0.01" id="prodPorcentaje" placeholder="% Ganancia" value="30" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <input type="number" id="prodStock" placeholder="Cantidad / Stock" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        
+                        <div class="flex gap-2">
+                            <button type="submit" id="btnGuardarProd" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all shadow-lg shadow-emerald-600/20">
+                                Guardar Producto
+                            </button>
+                            <button type="button" id="btnCancelarEdicion" onclick="cancelarEdicion()" class="hidden bg-zinc-700 hover:bg-zinc-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition-all">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Actualizar Precios por Foto de Proveedor -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+                    <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider border-b border-zinc-800 pb-2">2. Actualizar Precios por Foto de Proveedor</h2>
+                    <div class="space-y-3">
+                        <p class="text-xs text-zinc-400">Sube la foto de la lista enviada por el proveedor para actualizar costos y recalcular precios automáticamente:</p>
+                        <input type="file" id="fotoProveedor" accept="image/*" class="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700">
+                        <button onclick="procesarFotoProveedor()" id="btnFoto" class="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-medium py-2 rounded-lg text-sm transition-all">
+                            Procesar Foto y Actualizar Costos
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUMNA 2: Control de Stock y Márgenes -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4 flex flex-col">
+                <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
+                    <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">3. Control de Stock y Precios</h2>
+                    <button onclick="cargarStock()" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium">Actualizar</button>
+                </div>
+
+                <input type="text" id="inputFiltroStock" onkeyup="filtrarTablaStock()" placeholder="Filtrar por nombre, tipo o código..." class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+
+                <div id="stockContainer" class="max-h-[420px] overflow-y-auto space-y-2 pr-1 flex-1">
+                    <p class="text-xs text-zinc-500 text-center py-4">Cargando inventario...</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECCIÓN INFERIOR: Carga de Ventas Diarias por Rubro y Ganancias -->
+        <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
+                <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">4. Registro Diario de Ventas y Ganancia Neta por Rubro</h2>
+                <button onclick="cargarVentasDiarias()" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium">Refrescar Reportes</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Formulario de Carga Diaria -->
+                <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-3 md:col-span-1">
+                    <h3 class="text-xs font-semibold text-zinc-300 uppercase">Agregar Venta Diaria</h3>
+                    <form id="formVentaDiaria" onsubmit="guardarVentaDiaria(event)" class="space-y-3">
+                        <input type="date" id="ventaFecha" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        
+                        <!-- Rubro Desplegable -->
+                        <select id="ventaRubro" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                            <option value="" disabled selected>Selecciona un rubro...</option>
+                            <option value="Kiosco">Kiosco</option>
+                            <option value="Almacén">Almacén</option>
+                            <option value="Verdulería">Verdulería</option>
+                        </select>
+
+                        <input type="number" step="0.01" id="ventaTotal" placeholder="Total Vendido en el día ($)" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        <input type="number" step="0.01" id="ventaPorcentaje" placeholder="% Ganancia aplicable" value="30" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all shadow-lg shadow-emerald-600/20">
+                            Registrar Venta Diaria
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Resumen Mensual y Métricas -->
+                <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-4 md:col-span-2 flex flex-col justify-between">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-zinc-900 p-3 rounded-lg border border-zinc-800 space-y-1">
+                            <p class="text-xs text-zinc-400">Ganancia Neta Mes Actual</p>
+                            <p class="text-2xl font-bold text-emerald-400" id="reporteGananciaMensual">$0.00</p>
+                        </div>
+                        <div class="bg-zinc-900 p-3 rounded-lg border border-zinc-800 space-y-1">
+                            <p class="text-xs text-zinc-400">Total Ventas Registradas</p>
+                            <p class="text-2xl font-bold text-zinc-200" id="reporteTotalVentasMes">$0.00</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-zinc-400 uppercase">Historial de Registros Diarios</h4>
+                        <div id="ventasDiariasContainer" class="max-h-40 overflow-y-auto space-y-2 pr-1">
+                            <p class="text-xs text-zinc-500 text-center py-4">Sin registros de ventas aún.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="conexion.js"></script>
+    <script src="apps.js"></script>
+    <script src="reportes.js"></script>
+</body>
+</html>
