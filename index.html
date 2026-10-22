@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Almacén y Verdulería</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS v2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Estilos personalizados -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-3 md:p-6 font-sans">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-emerald-400">Gestión de Almacén & Verdulería</h1>
+                <p class="text-xs text-zinc-400">Actualización de precios por lista o foto, búsqueda inteligente y control de ganancias</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="btnBloquear" onclick="bloquearOResetearAcceso()" class="hidden text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/50 px-3 py-1.5 rounded-lg transition-all">🔒 Bloquear / Cambiar Clave</button>
+                <div id="statusBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="statusText">Verificando conexión...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Banner de Notificación -->
+        <div id="notificationBanner" class="hidden p-3 rounded-lg text-sm transition-all duration-300"></div>
+
+        <!-- PANTALLA DE ACCESO / CONFIGURACIÓN DE CONTRASEÑA -->
+        <section id="seccionAcceso" class="hidden max-w-sm mx-auto bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-xl space-y-4">
+            <div class="text-center space-y-1">
+                <h2 id="tituloAcceso" class="text-base font-bold text-emerald-400">Acceso al Sistema</h2>
+                <p id="subtituloAcceso" class="text-xs text-zinc-400">Ingresa la contraseña para continuar.</p>
+            </div>
+            <form onsubmit="procesarAcceso(event)" class="space-y-3">
+                <input type="password" id="inputPassword" placeholder="Contraseña de acceso" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                <button id="btnAcceso" type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all shadow-lg shadow-emerald-600/20">
+                    Ingresar
+                </button>
+            </form>
+        </section>
+
+        <!-- APP (Protegida por contraseña) -->
+        <div id="app" class="hidden space-y-6">
+
+            <!-- SECCIÓN 1: CARGA Y ACTUALIZACIÓN MASIVA -->
+            <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+                <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider border-b border-zinc-800 pb-2">
+                    Cargar / Actualizar Lista de Precios
+                </h2>
+                <p class="text-xs text-zinc-400">
+                    Pegá tu lista en texto (ej: <code class="bg-zinc-950 text-emerald-400 px-1 rounded">Galletitas $10.000</code> o <code class="bg-zinc-950 text-emerald-400 px-1 rounded">Aceite 1.500,50</code>) o subí una foto.
+                    Antes de guardar vas a poder revisar y corregir cada fila.
+                </p>
+
+                <div class="flex items-center gap-2 text-xs">
+                    <label for="pctDefault" class="text-zinc-300">% de recargo sobre el costo para productos nuevos:</label>
+                    <input type="number" step="0.01" min="0" id="pctDefault" value="30" oninput="guardarPctDefault()" class="w-20 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-zinc-100 focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-3">
+                        <label class="text-xs font-semibold text-zinc-300 block">Opción A: Pegar lista de precios en texto</label>
+                        <textarea id="inputListaTexto" rows="5" placeholder="Ejemplo:&#10;Aceite Marolio $1.200&#10;Arroz Lucchetti 850,50&#10;Fideos Matarazzo $10.500" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"></textarea>
+                        <button onclick="procesarTextoLista()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all shadow-lg shadow-emerald-600/20">
+                            ⚡ Revisar precios
+                        </button>
+                    </div>
+
+                    <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-3 flex flex-col justify-between">
+                        <div>
+                            <label class="text-xs font-semibold text-zinc-300 block mb-2">Opción B: Subir foto de la lista de precios</label>
+                            <input type="file" id="inputFotoLista" accept="image/*" class="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700">
+                            <p class="text-[10px] text-zinc-500 mt-2">La lectura (OCR) corre en tu navegador. Una foto nítida y derecha funciona mejor.</p>
+                        </div>
+                        <button onclick="procesarFotoLista()" id="btnAnalizarFoto" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm transition-all">
+                            📷 Leer foto y revisar precios
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel de revisión -->
+                <div id="panelRevision" class="hidden bg-zinc-950 p-4 rounded-lg border border-emerald-500/30 space-y-3">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <h3 class="text-xs font-semibold text-emerald-400 uppercase">Revisión antes de guardar</h3>
+                        <p id="revisionResumen" class="text-[11px] text-zinc-400"></p>
+                    </div>
+                    <div id="revisionFilas" class="max-h-96 overflow-y-auto space-y-2 pr-1"></div>
+                    <div class="flex gap-2">
+                        <button onclick="guardarRevision()" id="btnGuardarRevision" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all">
+                            💾 Guardar seleccionados
+                        </button>
+                        <button onclick="descartarRevision()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium px-4 py-2 rounded-lg text-sm">
+                            Descartar
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 2: BUSCADOR INTELIGENTE -->
+            <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+                <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
+                    <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">
+                        Buscador Inteligente de Productos
+                    </h2>
+                    <button onclick="borrarTodoElInventario()" class="text-xs text-rose-400 hover:text-rose-300 underline font-medium">Vaciar todo el inventario</button>
+                </div>
+
+                <input type="text" id="inputBuscador" oninput="buscarProductos()" placeholder="Escribí el nombre, rubro o código del producto..." class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+
+                <div id="resultadosBusqueda" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
+                    <p class="text-xs text-zinc-500 text-center col-span-full py-4">Cargando inventario...</p>
+                </div>
+                <p id="busquedaNota" class="text-[10px] text-zinc-500"></p>
+            </section>
+
+            <!-- SECCIÓN 3: VENTAS DIARIAS Y GANANCIAS -->
+            <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-xl space-y-4">
+                <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 border-b border-zinc-800 pb-2">
+                    <h2 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">
+                        Registro Diario de Ventas y Ganancias
+                    </h2>
+                    <div class="flex items-center gap-3">
+                        <label for="ventaMesFiltro" class="text-xs text-zinc-400">Mes:</label>
+                        <input type="month" id="ventaMesFiltro" onchange="cargarVentasDiarias()" class="bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500">
+                        <button onclick="cargarVentasDiarias()" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium">Refrescar</button>
+                        <button onclick="borrarHistorialVentas()" class="text-xs text-rose-400 hover:text-rose-300 underline font-medium">Limpiar historial</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-3 md:col-span-1">
+                        <h3 class="text-xs font-semibold text-zinc-300 uppercase">Agregar venta diaria</h3>
+                        <form id="formVentaDiaria" onsubmit="guardarVentaDiaria(event)" class="space-y-3">
+                            <input type="date" id="ventaFecha" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+
+                            <select id="ventaRubro" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                                <option value="" disabled selected>Seleccioná un rubro...</option>
+                                <option value="Kiosco">Kiosco</option>
+                                <option value="Almacén">Almacén</option>
+                                <option value="Verdulería">Verdulería</option>
+                            </select>
+
+                            <input type="number" step="0.01" min="0" id="ventaTotal" placeholder="Total vendido ($)" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+                            <input type="number" step="0.01" min="0" id="ventaPorcentaje" placeholder="% de recargo sobre costo" value="30" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500">
+
+                            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition-all shadow-lg shadow-emerald-600/20">
+                                Registrar venta diaria
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-4 md:col-span-2 flex flex-col justify-between">
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-zinc-900 p-3 rounded-lg border border-zinc-800 space-y-1">
+                                <p class="text-[10px] text-zinc-400 uppercase">Total vendido</p>
+                                <p class="text-xl font-bold text-zinc-200" id="reporteTotalVentasMes">$0,00</p>
+                            </div>
+                            <div class="bg-zinc-900 p-3 rounded-lg border border-zinc-800 space-y-1">
+                                <p class="text-[10px] text-amber-400 uppercase">Para reponer</p>
+                                <p class="text-xl font-bold text-amber-400" id="reporteReponerMensual">$0,00</p>
+                            </div>
+                            <div class="bg-zinc-900 p-3 rounded-lg border border-zinc-800 space-y-1">
+                                <p class="text-[10px] text-emerald-400 uppercase">Ganancia neta</p>
+                                <p class="text-xl font-bold text-emerald-400" id="reporteGananciaMensual">$0,00</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-semibold text-zinc-400 uppercase">Historial del mes</h4>
+                            <div id="ventasDiariasContainer" class="max-h-64 overflow-y-auto space-y-2 pr-1">
+                                <p class="text-xs text-zinc-500 text-center py-4">Sin registros de ventas aún.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </div>
+
+    <!-- Carga de Scripts en Orden -->
+    <script src="conexiones.js"></script>
+    <script src="apps.js"></script>
+    <script src="reportes.js"></script>
+</body>
+</html>
